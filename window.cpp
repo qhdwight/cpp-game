@@ -1,8 +1,8 @@
 #include "window.hpp"
 
 namespace voxelfield::window {
-    Window::Window(Application& application, const std::string title) : m_Application(application) {
-        m_Title = title.c_str();
+    Window::Window(Application& application, const std::string& title) : m_Application(application) {
+        m_Title = title;
         m_WindowClass = {
                 sizeof(WindowClass),
                 CS_OWNDC,
@@ -18,11 +18,15 @@ namespace voxelfield::window {
         };
     }
 
+    Window::~Window() {
+        DestroyWindow(m_Handle);
+    }
+
     long long
     Window::WindowProcess(WindowHandle windowHandle, unsigned int message, unsigned long long messageParameter, long long longMessageParameter) {
         switch (message) {
             case WM_CREATE: {
-                PixelFormatDescriptor pixelFormatDescriptor = {
+                PixelFormatDescriptor pixelFormatDescriptor{
                         sizeof(PixelFormatDescriptor),
                         1,
                         PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
@@ -61,14 +65,15 @@ namespace voxelfield::window {
 
     bool Window::Open() {
         if (!RegisterClassEx(&m_WindowClass)) {
-            logging::Logger::Log(logging::LogType::ERROR_LOG, "Failed to register window class");
-            MessageBox(nullptr, "Failed to register class! This should not ever happen... Ever. So I'm not sure what to say.", m_Title, MB_OK);
+            logging::Log(logging::LogType::ERROR_LOG, "Failed to register window class");
+            MessageBox(nullptr, "Failed to register class! This should not ever happen... Ever. So I'm not sure what to say.", m_Title.c_str(),
+                       MB_OK);
             return false;
         }
-        logging::Logger::Log(logging::LogType::INFO_LOG, "Successfully registered window class");
+        logging::Log(logging::LogType::INFO_LOG, "Successfully registered window class");
         m_Handle = CreateWindow(
                 m_Application.GetName().c_str(),
-                m_Title,
+                m_Title.c_str(),
                 WS_OVERLAPPEDWINDOW, 0, 0, 640, 480,
                 nullptr,
                 nullptr,
@@ -76,11 +81,12 @@ namespace voxelfield::window {
                 nullptr
         );
         if (!m_Handle) {
-            logging::Logger::Log(logging::LogType::ERROR_LOG, "Failed to create the window");
-            MessageBox(nullptr, "Failed to create the window! This should not ever happen... Ever. So I'm not sure what to say.", m_Title, MB_OK);
+            logging::Log(logging::LogType::ERROR_LOG, "Failed to create the window");
+            MessageBox(nullptr, "Failed to create the window! This should not ever happen... Ever. So I'm not sure what to say.", m_Title.c_str(),
+                       MB_OK);
             return false;
         }
-        logging::Logger::Log(logging::LogType::INFO_LOG, "Successfully created the window");
+        logging::Log(logging::LogType::INFO_LOG, "Successfully created the window");
         SetWindowLongPtr(m_Handle, GWLP_USERDATA, reinterpret_cast<long long>(this));
         ShowWindow(m_Handle, SW_SHOW);
         SetForegroundWindow(m_Handle);

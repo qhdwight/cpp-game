@@ -10,8 +10,8 @@
 
 namespace voxelfield::window {
     class Window {
-    private:
-        const char* m_Title;
+    protected:
+        std::string m_Title;
         WindowClass m_WindowClass;
         WindowHandle m_Handle;
         Application& m_Application;
@@ -20,9 +20,11 @@ namespace voxelfield::window {
         WindowProcess(WindowHandle windowHandle, unsigned int message, unsigned long long messageParameter, long long longMessageParameter);
 
     public:
-        Window(Application& application, std::string title);
+        Window(Application& application, const std::string& title);
 
         Window() = delete;
+
+        virtual ~Window();
 
         bool Open();
 
