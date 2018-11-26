@@ -10,7 +10,7 @@
 
 namespace voxelfield::logging {
     enum LogType : uint8 {
-        INFO_LOG, WARNING_LOG, ERROR_LOG
+        INFORMATION_LOG, WARNING_LOG, ERROR_LOG
     };
 
     void Log(LogType logType, const std::string& message);

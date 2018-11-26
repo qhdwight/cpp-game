@@ -10,7 +10,7 @@ namespace voxelfield::window {
                 0, 0,
                 application.GetHandle(),
                 nullptr,
-                LoadCursor(nullptr, IDC_CROSS),
+                LoadCursor(nullptr, IDC_ARROW),
                 (HBRUSH) COLOR_BACKGROUND,
                 nullptr,
                 application.GetName().c_str(),
@@ -67,10 +67,10 @@ namespace voxelfield::window {
         if (!RegisterClassEx(&m_WindowClass)) {
             logging::Log(logging::LogType::ERROR_LOG, "Failed to register window class");
             MessageBox(nullptr, "Failed to register class! This should not ever happen... Ever. So I'm not sure what to say.", m_Title.c_str(),
-                       MB_OK);
+                       MB_ICONERROR);
             return false;
         }
-        logging::Log(logging::LogType::INFO_LOG, "Successfully registered window class");
+        logging::Log(logging::LogType::INFORMATION_LOG, "Successfully registered window class");
         m_Handle = CreateWindow(
                 m_Application.GetName().c_str(),
                 m_Title.c_str(),
@@ -83,14 +83,18 @@ namespace voxelfield::window {
         if (!m_Handle) {
             logging::Log(logging::LogType::ERROR_LOG, "Failed to create the window");
             MessageBox(nullptr, "Failed to create the window! This should not ever happen... Ever. So I'm not sure what to say.", m_Title.c_str(),
-                       MB_OK);
+                       MB_ICONERROR);
             return false;
         }
-        logging::Log(logging::LogType::INFO_LOG, "Successfully created the window");
+        logging::Log(logging::LogType::INFORMATION_LOG, "Successfully created the window");
         SetWindowLongPtr(m_Handle, GWLP_USERDATA, reinterpret_cast<long long>(this));
         ShowWindow(m_Handle, SW_SHOW);
         SetForegroundWindow(m_Handle);
         SetFocus(m_Handle);
+        return true;
+    }
+
+    void Window::Loop() {
         WindowMessage message;
         while (GetMessage(&message, nullptr, 0, 0)) {
 //            if (GetKeyState(0x46) & 0x8000) {
@@ -106,7 +110,6 @@ namespace voxelfield::window {
             TranslateMessage(&message);
             DispatchMessage(&message);
         }
-        return true;
     }
 
     void Window::SetFullscreen(bool isFullScreen) {

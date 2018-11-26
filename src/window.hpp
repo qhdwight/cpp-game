@@ -10,6 +10,19 @@
 
 namespace voxelfield::window {
     class Window {
+    public:
+        Window(Application& application, const std::string& title);
+
+        Window() = delete;
+
+        virtual ~Window();
+
+        virtual bool Open();
+
+        void Loop();
+
+        void SetFullscreen(bool isFullScreen);
+
     protected:
         std::string m_Title;
         WindowClass m_WindowClass;
@@ -18,16 +31,5 @@ namespace voxelfield::window {
 
         static long long
         WindowProcess(WindowHandle windowHandle, unsigned int message, unsigned long long messageParameter, long long longMessageParameter);
-
-    public:
-        Window(Application& application, const std::string& title);
-
-        Window() = delete;
-
-        virtual ~Window();
-
-        bool Open();
-
-        void SetFullscreen(bool isFullScreen);
     };
 }
