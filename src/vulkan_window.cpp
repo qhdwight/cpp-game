@@ -33,6 +33,7 @@ namespace voxelfield::window {
     }
 
     VulkanWindow::~VulkanWindow() {
+        vkDestroyPipelineLayout(m_LogicalDeviceHandle, m_PipelineLayoutHandle, nullptr);
         for (auto imageViewHandle : m_SwapchainImageViewHandles)
             vkDestroyImageView(m_LogicalDeviceHandle, imageViewHandle, nullptr);
         vkDestroySwapchainKHR(m_LogicalDeviceHandle, m_SwapchainHandle, nullptr);
@@ -417,5 +418,145 @@ namespace voxelfield::window {
             }
         }
         logging::Log(logging::LogType::INFORMATION_LOG, "Successfully created Vulkan swapchain image views");
+    }
+
+    void VulkanWindow::CreatePipeline() {
+        const auto
+                vertexShaderSource = file::ReadFile("shaders/vert.spv"),
+                fragmentShaderSource = file::ReadFile("shaders/frag.spv");
+        m_VertexShaderModuleHandle = CreateShaderModule(vertexShaderSource);
+        m_FragmentShaderModuleHandle = CreateShaderModule(fragmentShaderSource);
+        VkPipelineShaderStageCreateInfo
+                vertexShaderStateCreationInformation{
+                VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                nullptr,
+                0,
+                VK_SHADER_STAGE_VERTEX_BIT,
+                m_VertexShaderModuleHandle,
+                "main",
+                nullptr
+        },
+                fragmentShaderStateCreationInformation{
+                VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                nullptr,
+                0,
+                VK_SHADER_STAGE_FRAGMENT_BIT,
+                m_FragmentShaderModuleHandle,
+                "main",
+                nullptr
+        };
+        std::array<VkPipelineShaderStageCreateInfo, 2> shaderStates = {vertexShaderStateCreationInformation, fragmentShaderStateCreationInformation};
+        VkPipelineVertexInputStateCreateInfo vertexInputStateCreationInformation{
+                VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+                nullptr,
+                0,
+                0, nullptr,
+                0, nullptr
+        };
+        VkPipelineInputAssemblyStateCreateInfo inputAssemblyCreationInformation{
+                VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+                nullptr,
+                0,
+                VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                VK_FALSE
+        };
+        VkViewport viewport = {
+                0.0f, 0.0f, static_cast<float>(m_SwapchainExtent.width), static_cast<float>(m_SwapchainExtent.height),
+                0.0f, 1.0f
+        };
+        VkRect2D scissor = {{0, 0}, m_SwapchainExtent};
+        VkPipelineViewportStateCreateInfo viewportStateCreationInformation{
+                VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+                nullptr,
+                0,
+                1,
+                &viewport,
+                1,
+                &scissor
+        };
+        VkPipelineRasterizationStateCreateInfo rasterizationStateCreationInformation{
+                VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+                nullptr,
+                0,
+                VK_FALSE,
+                VK_FALSE,
+                VK_POLYGON_MODE_FILL,
+                VK_CULL_MODE_BACK_BIT,
+                VK_FRONT_FACE_CLOCKWISE,
+                VK_FALSE,
+                0.0f, 0.0f, 0.0f
+        };
+        VkPipelineMultisampleStateCreateInfo multisampleStateCreationInformation{
+                VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+                nullptr,
+                0,
+                VK_SAMPLE_COUNT_1_BIT,
+                VK_FALSE,
+                1.0f,
+                nullptr,
+                VK_FALSE,
+                VK_FALSE
+        };
+        VkPipelineColorBlendAttachmentState colorBlendAttachmentState{
+                VK_FALSE,
+                VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO,
+                VK_BLEND_OP_ADD,
+                VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO,
+                VK_BLEND_OP_ADD,
+                0
+        };
+        VkPipelineColorBlendStateCreateInfo colorBlendStateCreationInformation{
+                VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+                nullptr,
+                0,
+                VK_FALSE,
+                VK_LOGIC_OP_COPY,
+                1,
+                &colorBlendAttachmentState,
+                {0.0f, 0.0f, 0.0f, 0.0f}
+        };
+        VkPipelineLayoutCreateInfo pipelineLayoutCreationInformation{
+                VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                nullptr,
+                0,
+                0, nullptr,
+                0, nullptr
+        };
+        if (const VkResult result = vkCreatePipelineLayout(m_LogicalDeviceHandle, &pipelineLayoutCreationInformation, nullptr,
+                                                           &m_PipelineLayoutHandle); result != VK_SUCCESS) {
+            const std::string errorMessage = util::Format("Error code %i, could not create Vulkan pipeline", MAX_MESSAGE_LENGTH, result);
+            logging::Log(logging::LogType::ERROR_LOG, errorMessage);
+            MessageBox(nullptr, errorMessage.c_str(), m_Title.c_str(), MB_ICONERROR);
+        }
+        vkDestroyShaderModule(m_LogicalDeviceHandle, m_VertexShaderModuleHandle, nullptr);
+        vkDestroyShaderModule(m_LogicalDeviceHandle, m_FragmentShaderModuleHandle, nullptr);
+    }
+
+    void VulkanWindow::CreateRenderPass() {
+        VkAttachmentDescription colorAttachment{
+                0,
+                m_SwapchainImageFormat,
+                VK_SAMPLE_COUNT_1_BIT,
+                VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE,
+                VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+        };
+
+    }
+
+    VkShaderModule VulkanWindow::CreateShaderModule(const std::vector<char>& shaderSource) {
+        VkShaderModuleCreateInfo creationInformation{
+                VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+                nullptr,
+                0,
+                shaderSource.size(),
+                reinterpret_cast<const uint32*>(shaderSource.data())
+        };
+        VkShaderModule shaderModule;
+        if (vkCreateShaderModule(m_LogicalDeviceHandle, &creationInformation, nullptr, &shaderModule) != VK_SUCCESS) {
+            logging::Log(logging::LogType::ERROR_LOG, "Could not compile shader");
+            return nullptr;
+        }
+        return shaderModule;
     }
 }

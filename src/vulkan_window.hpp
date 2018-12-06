@@ -1,7 +1,5 @@
 #pragma once
 
-#define VK_USE_PLATFORM_WIN32_KHR
-
 #define NUMBER_OF_QUEUE_INDICES 2
 
 #include <vulkan/vulkan.h>
@@ -13,6 +11,7 @@
 
 #include "game.hpp"
 #include "window.hpp"
+#include "file_reader.hpp"
 
 namespace voxelfield::window {
     struct PhysicalDeviceInformation {
@@ -60,6 +59,8 @@ namespace voxelfield::window {
         VkFormat m_SwapchainImageFormat;
         VkExtent2D m_SwapchainExtent;
         std::vector<VkImageView> m_SwapchainImageViewHandles;
+        VkShaderModule m_VertexShaderModuleHandle, m_FragmentShaderModuleHandle;
+        VkPipelineLayout m_PipelineLayoutHandle;
 
         void CreateVulkanInstance();
 
@@ -72,5 +73,11 @@ namespace voxelfield::window {
         void CreateSwapChain();
 
         void CreateImageViews();
+
+        void CreatePipeline();
+
+        void CreateRenderPass();
+
+        VkShaderModule CreateShaderModule(const std::vector<char>& shaderSource);
     };
 }
