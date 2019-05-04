@@ -146,8 +146,8 @@ namespace voxelfield::window {
                 m_Application.GetHandle(),
                 m_Handle
         };
-        if (VkResult result = vkCreateWin32SurfaceKHR(m_VulkanInstanceHandle, &surfaceCreationInformation, nullptr, &m_SurfaceHandle); result !=
-                                                                                                                                       VK_SUCCESS) {
+        if (VkResult result = vkCreateWin32SurfaceKHR(m_VulkanInstanceHandle, &surfaceCreationInformation, nullptr, &m_SurfaceHandle);
+                result != VK_SUCCESS) {
             throw std::runtime_error(util::Format("Error code %i, could not create windows rendering surface", MAX_MESSAGE_LENGTH, result));
         }
         logging::Log(logging::LogType::INFORMATION_LOG, "Successfully created windows rendering surface");
@@ -632,14 +632,15 @@ namespace voxelfield::window {
                                                              m_CommandBufferHandles.data()); result != VK_SUCCESS) {
             throw std::runtime_error(util::Format("Error code %i, could not allocate Vulkan command buffers", MAX_MESSAGE_LENGTH, result));
         }
-        for (size_t i = 0; i < m_CommandBufferHandles.size(); i++) {
+        for (size_t commandIndex = 0; commandIndex < m_CommandBufferHandles.size(); commandIndex++) {
             VkCommandBufferBeginInfo beginInfo{
                     VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
                     nullptr,
                     VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,
                     nullptr
             };
-            if (const VkResult result = vkBeginCommandBuffer(m_CommandBufferHandles[i], &beginInfo); result != VK_SUCCESS) {
+            const VkCommandBuffer& commandBuffer = m_CommandBufferHandles[commandIndex];
+            if (const VkResult result = vkBeginCommandBuffer(commandBuffer, &beginInfo); result != VK_SUCCESS) {
                 throw std::runtime_error(util::Format("Error code %i, failed to begin command buffer", MAX_MESSAGE_LENGTH, result));
             }
             VkClearValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
@@ -647,16 +648,16 @@ namespace voxelfield::window {
                     VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                     nullptr,
                     m_RenderPassHandle,
-                    m_SwapChainFramebufferHandles[i],
+                    m_SwapChainFramebufferHandles[commandIndex],
                     {{0, 0}, m_SwapchainExtent},
                     1,
                     &clearColor
             };
-            vkCmdBeginRenderPass(m_CommandBufferHandles[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-            vkCmdBindPipeline(m_CommandBufferHandles[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
-            vkCmdDraw(m_CommandBufferHandles[i], 3, 1, 0, 0);
-            vkCmdEndRenderPass(m_CommandBufferHandles[i]);
-            if (const VkResult result = vkEndCommandBuffer(m_CommandBufferHandles[i]); result != VK_SUCCESS) {
+            vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
+            vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+            vkCmdEndRenderPass(commandBuffer);
+            if (const VkResult result = vkEndCommandBuffer(commandBuffer); result != VK_SUCCESS) {
                 throw std::runtime_error(util::Format("Error code %i, failed to end command buffer", MAX_MESSAGE_LENGTH, result));
             }
         }

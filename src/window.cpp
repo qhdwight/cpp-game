@@ -65,8 +65,7 @@ namespace voxelfield::window {
 
     void Window::Open() {
         if (!RegisterClassEx(&m_WindowClass)) {
-            logging::Log(logging::LogType::ERROR_LOG, "Failed to register window class");
-            const std::string errorMessage = "Failed to register class! This should not ever happen... Ever. So I'm not sure what to say.";
+            const std::string errorMessage = "Failed to register window class! This should not ever happen... Ever. So I'm not sure what to say.";
             throw std::runtime_error(errorMessage);
         }
         logging::Log(logging::LogType::INFORMATION_LOG, "Successfully registered window class");
@@ -80,7 +79,6 @@ namespace voxelfield::window {
                 nullptr
         );
         if (!m_Handle) {
-            logging::Log(logging::LogType::ERROR_LOG, "Failed to create the window");
             const std::string errorMessage = "Failed to create the window! This should not ever happen... Ever. So I'm not sure what to say.";
             throw std::runtime_error(errorMessage);
         }
