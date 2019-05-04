@@ -8,5 +8,5 @@
 #include "logger.hpp"
 
 namespace voxelfield::file {
-    static std::vector<char> ReadFile(const std::string& fileName);
+    std::vector<char> ReadFile(const std::string& fileName);
 }

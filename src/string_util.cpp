@@ -1,12 +1,14 @@
 #include "string_util.hpp"
 
+#include <vector>
+
 namespace voxelfield::util {
-    std::string Format(const std::string& format, unsigned int length, ...) {
-        char formattedMessage[length];
+    std::string Format(const std::string& format, const unsigned int length, ...) {
         va_list arguments;
+        std::vector<char> output(length);
         va_start(arguments, length);
-        auto formattedLength = static_cast<unsigned long>(std::vsnprintf(formattedMessage, length, format.c_str(), arguments));
+        std::vsnprintf(output.data(), length, format.c_str(), arguments);
         va_end(arguments);
-        return std::string(formattedMessage, formattedLength);
+        return output.data();
     }
 }

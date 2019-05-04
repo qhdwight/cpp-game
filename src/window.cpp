@@ -63,12 +63,11 @@ namespace voxelfield::window {
         return 0;
     }
 
-    bool Window::Open() {
+    void Window::Open() {
         if (!RegisterClassEx(&m_WindowClass)) {
             logging::Log(logging::LogType::ERROR_LOG, "Failed to register window class");
-            MessageBox(nullptr, "Failed to register class! This should not ever happen... Ever. So I'm not sure what to say.", m_Title.c_str(),
-                       MB_ICONERROR);
-            return false;
+            const std::string errorMessage = "Failed to register class! This should not ever happen... Ever. So I'm not sure what to say.";
+            throw std::runtime_error(errorMessage);
         }
         logging::Log(logging::LogType::INFORMATION_LOG, "Successfully registered window class");
         m_Handle = CreateWindow(
@@ -82,16 +81,14 @@ namespace voxelfield::window {
         );
         if (!m_Handle) {
             logging::Log(logging::LogType::ERROR_LOG, "Failed to create the window");
-            MessageBox(nullptr, "Failed to create the window! This should not ever happen... Ever. So I'm not sure what to say.", m_Title.c_str(),
-                       MB_ICONERROR);
-            return false;
+            const std::string errorMessage = "Failed to create the window! This should not ever happen... Ever. So I'm not sure what to say.";
+            throw std::runtime_error(errorMessage);
         }
         logging::Log(logging::LogType::INFORMATION_LOG, "Successfully created the window");
         SetWindowLongPtr(m_Handle, GWLP_USERDATA, reinterpret_cast<long long>(this));
         ShowWindow(m_Handle, SW_SHOW);
         SetForegroundWindow(m_Handle);
         SetFocus(m_Handle);
-        return true;
     }
 
     void Window::Loop() {
@@ -109,6 +106,7 @@ namespace voxelfield::window {
 //            }
             TranslateMessage(&message);
             DispatchMessage(&message);
+            Draw();
         }
     }
 

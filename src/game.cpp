@@ -9,9 +9,14 @@ namespace voxelfield {
         const std::string gameName = "Voxelfield";
         Application application(gameName);
         window::VulkanWindow window(application, gameName);
-        if (!window.Open())
+        try {
+            window.Open();
+            window.Loop();
+        } catch (const std::exception& exception) {
+            logging::Log(logging::LogType::ERROR_LOG, exception.what());
+            MessageBox(nullptr, exception.what(), gameName.c_str(), MB_ICONERROR);
             return EXIT_FAILURE;
-        window.Loop();
+        }
         return EXIT_SUCCESS;
     }
 }

@@ -1,13 +1,14 @@
 #pragma once
 
 #define NUMBER_OF_QUEUE_INDICES 2
+#define MAX_FRAMES_IN_FLIGHT 2
 
 #include <vulkan/vulkan.h>
 #include <algorithm>
+#include <optional>
 #include <vector>
 #include <array>
 #include <set>
-#include <optional>
 
 #include "game.hpp"
 #include "window.hpp"
@@ -35,7 +36,10 @@ namespace voxelfield::window {
 
         virtual ~VulkanWindow();
 
-        bool Open() override;
+        void Open() override;
+
+    protected:
+        void Draw() override;
 
     protected:
 #ifdef VALIDATION_LAYERS_ENABLED
@@ -52,15 +56,23 @@ namespace voxelfield::window {
         PhysicalDeviceInformation m_PhysicalDevice;
         QueueFamilyIndices m_QueueFamilyIndices;
         VkDevice m_LogicalDeviceHandle;
-        VkQueue m_GraphicsQueueHandle;
+        VkQueue m_GraphicsQueueHandle, m_PresentationQueueHandle;
         VkSurfaceKHR m_SurfaceHandle;
         VkSwapchainKHR m_SwapchainHandle;
+        VkRenderPass m_RenderPassHandle;
         std::vector<VkImage> m_SwapchainImageHandles;
         VkFormat m_SwapchainImageFormat;
         VkExtent2D m_SwapchainExtent;
         std::vector<VkImageView> m_SwapchainImageViewHandles;
         VkShaderModule m_VertexShaderModuleHandle, m_FragmentShaderModuleHandle;
+        VkPipeline m_Pipeline;
         VkPipelineLayout m_PipelineLayoutHandle;
+        std::vector<VkFramebuffer> m_SwapChainFramebufferHandles;
+        VkCommandPool m_CommandPoolHandle;
+        std::vector<VkCommandBuffer> m_CommandBufferHandles;
+        std::vector<VkSemaphore> m_ImageAvailableSemaphoreHandles, m_RenderFinishedSemaphoreHandles;
+        std::vector<VkFence> m_InFlightFences;
+        size_t m_CurrentFrame = 0;
 
         void CreateVulkanInstance();
 
@@ -74,9 +86,19 @@ namespace voxelfield::window {
 
         void CreateImageViews();
 
-        void CreatePipeline();
+        void CreateGraphicsPipeline();
 
         void CreateRenderPass();
+
+        void CreateFramebuffers();
+
+        void CreateCommandPool();
+
+        void CreateCommandBuffers();
+
+        void CreateSynchronizationObjects();
+
+        void DrawFrame();
 
         VkShaderModule CreateShaderModule(const std::vector<char>& shaderSource);
     };

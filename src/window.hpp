@@ -17,7 +17,7 @@ namespace voxelfield::window {
 
         virtual ~Window();
 
-        virtual bool Open();
+        virtual void Open();
 
         void Loop();
 
@@ -29,7 +29,9 @@ namespace voxelfield::window {
         WindowHandle m_Handle;
         Application& m_Application;
 
-        static long long
-        WindowProcess(WindowHandle windowHandle, unsigned int message, unsigned long long messageParameter, long long longMessageParameter);
+        static long long WindowProcess
+                (WindowHandle windowHandle, unsigned int message, unsigned long long messageParameter, long long longMessageParameter);
+
+        virtual void Draw() {}
     };
 }
