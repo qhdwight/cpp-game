@@ -26,20 +26,7 @@ namespace voxelfield::window {
     Window::WindowProcess(WindowHandle windowHandle, unsigned int message, unsigned long long messageParameter, long long longMessageParameter) {
         switch (message) {
             case WM_CREATE: {
-                PixelFormatDescriptor pixelFormatDescriptor{
-                        sizeof(PixelFormatDescriptor),
-                        1,
-                        PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
-                        PFD_TYPE_RGBA,
-                        32,                 // Color depth
-                        0, 0, 0, 0, 0, 0,
-                        24,                 // Number of bits in depth buffer
-                        8,                  // Number of bits in stencil buffer
-                        0,                  // Number of auxiliary buffers in frame buffer
-                        PFD_MAIN_PLANE,
-                        0,
-                        0, 0, 0
-                };
+                break;
             }
             case WM_PAINT: {
                 ValidateRect(windowHandle, nullptr);
@@ -56,11 +43,8 @@ namespace voxelfield::window {
                 PostQuitMessage(0);
                 break;
             }
-            default: {
-                return DefWindowProc(windowHandle, message, messageParameter, longMessageParameter);
-            }
         }
-        return 0;
+        return DefWindowProc(windowHandle, message, messageParameter, longMessageParameter);
     }
 
     void Window::Open() {
@@ -83,6 +67,30 @@ namespace voxelfield::window {
             throw std::runtime_error(errorMessage);
         }
         logging::Log(logging::LogType::INFORMATION_LOG, "Successfully created the window");
+//        auto* drawingHandle = GetDC(m_Handle);
+//        PixelFormatDescriptor pixelFormatDescriptor{
+//                sizeof(PixelFormatDescriptor),
+//                1,
+//                PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+//                PFD_TYPE_RGBA,
+//                32,                 // Color depth
+//                0, 0, 0, 0, 0, 0,
+//                24,                 // Number of bits in depth buffer
+//                8,                  // Number of bits in stencil buffer
+//                0,                  // Number of auxiliary buffers in frame buffer
+//                PFD_MAIN_PLANE,
+//                0,
+//                0, 0, 0
+//        };
+//        int pixelFormat = ChoosePixelFormat(drawingHandle, &pixelFormatDescriptor);
+//        if (!pixelFormat) {
+//            throw std::runtime_error("Could not find a suitable pixel format");
+//        }
+//        if (!SetPixelFormat(drawingHandle, pixelFormat, &pixelFormatDescriptor)) {
+//            throw std::runtime_error("Could not set pixel format");
+//        }
+//        DescribePixelFormat(drawingHandle, pixelFormat, sizeof(PIXELFORMATDESCRIPTOR), &pixelFormatDescriptor);
+//        ReleaseDC(m_Handle, drawingHandle);
         SetWindowLongPtr(m_Handle, GWLP_USERDATA, reinterpret_cast<long long>(this));
         ShowWindow(m_Handle, SW_SHOW);
         SetForegroundWindow(m_Handle);
@@ -91,6 +99,7 @@ namespace voxelfield::window {
 
     void Window::Loop() {
         WindowMessage message;
+        Draw();
         while (GetMessage(&message, nullptr, 0, 0)) {
 //            if (GetKeyState(0x46) & 0x8000) {
 //                if (s_FKeyStatus == 0) {
@@ -104,7 +113,6 @@ namespace voxelfield::window {
 //            }
             TranslateMessage(&message);
             DispatchMessage(&message);
-            Draw();
         }
     }
 

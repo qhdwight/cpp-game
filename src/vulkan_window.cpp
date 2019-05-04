@@ -277,19 +277,18 @@ namespace voxelfield::window {
         }
         m_QueueFamilyIndices = {graphicsFamilyIndex.value(), presentationFamilyIndex.value()};
         const std::set<uint32> uniqueQueueFamilyIndices{m_QueueFamilyIndices.graphicsFamilyIndex, m_QueueFamilyIndices.presentationFamilyIndex};
-        std::vector<VkDeviceQueueCreateInfo> deviceQueueCreateInformation(uniqueQueueFamilyIndices.size());
+        std::vector<VkDeviceQueueCreateInfo> deviceQueueCreateInformation;
         {
             const float priority = 1.0f;
-            unsigned int index = 0;
             for (uint32 queueFamilyIndex : uniqueQueueFamilyIndices) {
-                deviceQueueCreateInformation[index++] = {
-                        VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-                        nullptr,
-                        0,
-                        queueFamilyIndex,
-                        1,
-                        &priority
-                };
+                deviceQueueCreateInformation.push_back({
+                                                               VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                                                               nullptr,
+                                                               0,
+                                                               queueFamilyIndex,
+                                                               1,
+                                                               &priority
+                                                       });
             }
         }
         VkPhysicalDeviceFeatures physicalDeviceFeatures{};
