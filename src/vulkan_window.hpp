@@ -20,7 +20,6 @@ namespace voxelfield::window {
         VkPhysicalDevice handle;
         VkPhysicalDeviceProperties deviceProperties;
         VkPhysicalDeviceFeatures deviceFeatures;
-        VkSurfaceCapabilitiesKHR surfaceCapabilities;
         std::vector<VkSurfaceFormatKHR> supportedSurfaceFormats;
         std::vector<VkPresentModeKHR> supportedPresentationModes;
         unsigned int score;
@@ -34,12 +33,9 @@ namespace voxelfield::window {
     public:
         VulkanWindow(Application& application, const std::string& title);
 
-        virtual ~VulkanWindow();
+        ~VulkanWindow() override;
 
         void Open() override;
-
-    protected:
-        void Draw() override;
 
     protected:
 #ifdef VALIDATION_LAYERS_ENABLED
@@ -71,8 +67,16 @@ namespace voxelfield::window {
         VkCommandPool m_CommandPoolHandle;
         std::vector<VkCommandBuffer> m_CommandBufferHandles;
         std::vector<VkSemaphore> m_ImageAvailableSemaphoreHandles, m_RenderFinishedSemaphoreHandles;
-        std::vector<VkFence> m_InFlightFences;
+        std::vector<VkFence> m_InFlightFenceHandles;
         size_t m_CurrentFrame = 0;
+        VkBuffer m_VertexBufferHandle;
+        VkDeviceMemory m_VertexBufferMemoryHandle;
+
+        void Draw() override;
+
+        void Release();
+
+        void ReleaseSwapChain();
 
         void CreateVulkanInstance();
 
@@ -81,6 +85,8 @@ namespace voxelfield::window {
         void SelectPhysicalDevice();
 
         void CreateLogicalDevice();
+
+        void RecreateSwapChain();
 
         void CreateSwapChain();
 
@@ -93,6 +99,8 @@ namespace voxelfield::window {
         void CreateFramebuffers();
 
         void CreateCommandPool();
+
+        void CreateVertexBuffer();
 
         void CreateCommandBuffers();
 

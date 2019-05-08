@@ -3,6 +3,8 @@
 #include <limits>
 #include <bitset>
 
+#include "vertex.hpp"
+
 namespace voxelfield::window {
 #ifdef VALIDATION_LAYERS_ENABLED
 
@@ -36,15 +38,31 @@ namespace voxelfield::window {
     }
 
     VulkanWindow::~VulkanWindow() {
-        vkDestroyCommandPool(m_LogicalDeviceHandle, m_CommandPoolHandle, nullptr);
+        Release();
+    }
+
+    void VulkanWindow::ReleaseSwapChain() {
+        vkDeviceWaitIdle(m_LogicalDeviceHandle);
         for (auto framebuffer : m_SwapChainFramebufferHandles)
             vkDestroyFramebuffer(m_LogicalDeviceHandle, framebuffer, nullptr);
+        vkFreeCommandBuffers
+                (m_LogicalDeviceHandle, m_CommandPoolHandle, static_cast<uint32>(m_CommandBufferHandles.size()), m_CommandBufferHandles.data());
         vkDestroyPipeline(m_LogicalDeviceHandle, m_Pipeline, nullptr);
         vkDestroyPipelineLayout(m_LogicalDeviceHandle, m_PipelineLayoutHandle, nullptr);
         vkDestroyRenderPass(m_LogicalDeviceHandle, m_RenderPassHandle, nullptr);
         for (auto imageViewHandle : m_SwapchainImageViewHandles)
             vkDestroyImageView(m_LogicalDeviceHandle, imageViewHandle, nullptr);
         vkDestroySwapchainKHR(m_LogicalDeviceHandle, m_SwapchainHandle, nullptr);
+    }
+
+    void VulkanWindow::Release() {
+        ReleaseSwapChain();
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            vkDestroySemaphore(m_LogicalDeviceHandle, m_RenderFinishedSemaphoreHandles[i], nullptr);
+            vkDestroySemaphore(m_LogicalDeviceHandle, m_ImageAvailableSemaphoreHandles[i], nullptr);
+            vkDestroyFence(m_LogicalDeviceHandle, m_InFlightFenceHandles[i], nullptr);
+        }
+        vkDestroyCommandPool(m_LogicalDeviceHandle, m_CommandPoolHandle, nullptr);
         vkDestroyDevice(m_LogicalDeviceHandle, nullptr);
 #ifdef VALIDATION_LAYERS_ENABLED
         auto destroyFunction = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(m_VulkanInstanceHandle,
@@ -146,7 +164,7 @@ namespace voxelfield::window {
                 m_Application.GetHandle(),
                 m_Handle
         };
-        if (VkResult result = vkCreateWin32SurfaceKHR(m_VulkanInstanceHandle, &surfaceCreationInformation, nullptr, &m_SurfaceHandle);
+        if (const VkResult result = vkCreateWin32SurfaceKHR(m_VulkanInstanceHandle, &surfaceCreationInformation, nullptr, &m_SurfaceHandle);
                 result != VK_SUCCESS) {
             throw std::runtime_error(util::Format("Error code %i, could not create windows rendering surface", MAX_MESSAGE_LENGTH, result));
         }
@@ -198,12 +216,6 @@ namespace voxelfield::window {
                     break;
                 }
             }
-            // Check for surface capability
-            VkSurfaceCapabilitiesKHR surfaceCapabilities{};
-            if (const VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(deviceHandle, m_SurfaceHandle, &surfaceCapabilities); result !=
-                                                                                                                                        VK_SUCCESS) {
-                throw std::runtime_error(util::Format("Error code %i, could not retrieve device surface capabilities", MAX_MESSAGE_LENGTH, result));
-            }
             uint32 formatCount;
             vkGetPhysicalDeviceSurfaceFormatsKHR(deviceHandle, m_SurfaceHandle, &formatCount, nullptr);
             if (formatCount == 0) {
@@ -221,8 +233,7 @@ namespace voxelfield::window {
                              util::Format("No presentation modes supported for device %s", MAX_MESSAGE_LENGTH, deviceProperties.deviceName));
             }
             std::vector<VkPresentModeKHR> supportedPresentationModes(presentationModeCount);
-            vkGetPhysicalDeviceSurfacePresentModesKHR(deviceHandle, m_SurfaceHandle, &presentationModeCount,
-                                                      supportedPresentationModes.data());
+            vkGetPhysicalDeviceSurfacePresentModesKHR(deviceHandle, m_SurfaceHandle, &presentationModeCount, supportedPresentationModes.data());
             const bool isIntegratedDevice = deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
             logging::Log(logging::LogType::INFORMATION_LOG,
                          util::Format("Detected %s rendering device: %s", MAX_MESSAGE_LENGTH, isIntegratedDevice ? "integrated" : "discrete",
@@ -232,7 +243,6 @@ namespace voxelfield::window {
                     deviceHandle,
                     deviceProperties,
                     deviceFeatures,
-                    surfaceCapabilities,
                     supportedSurfaceFormats,
                     supportedPresentationModes,
                     deviceScore
@@ -258,7 +268,8 @@ namespace voxelfield::window {
         bool hasRequiredQueueFamilies = false;
         std::optional<uint32> graphicsFamilyIndex, presentationFamilyIndex;
         for (unsigned int queueFamilyIndex = 0; queueFamilyIndex < queueFamilyCount; queueFamilyIndex++) {
-            const VkQueueFamilyProperties& queueFamily = queueFamilies[queueFamilyIndex];
+            const VkQueueFamilyProperties& queueFamily =
+                    queueFamilies[queueFamilyIndex];
             if (queueFamily.queueCount > 0) {
                 if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
                     graphicsFamilyIndex = queueFamilyIndex;
@@ -309,11 +320,21 @@ namespace voxelfield::window {
         if (VkResult result = vkCreateDevice(m_PhysicalDevice.handle, &deviceCreateInformation, nullptr, &m_LogicalDeviceHandle); result !=
                                                                                                                                   VK_SUCCESS) {
             throw std::runtime_error(util::Format("Error code %i, could not create logical Vulkan device", MAX_MESSAGE_LENGTH, result));
-            return;
         }
         logging::Log(logging::LogType::INFORMATION_LOG, "Successfully created logical Vulkan device");
         vkGetDeviceQueue(m_LogicalDeviceHandle, m_QueueFamilyIndices.graphicsFamilyIndex, 0, &m_GraphicsQueueHandle);
         vkGetDeviceQueue(m_LogicalDeviceHandle, m_QueueFamilyIndices.presentationFamilyIndex, 0, &m_PresentationQueueHandle);
+    }
+
+    void VulkanWindow::RecreateSwapChain() {
+        vkDeviceWaitIdle(m_LogicalDeviceHandle);
+        ReleaseSwapChain();
+        CreateSwapChain();
+        CreateImageViews();
+        CreateRenderPass();
+        CreateGraphicsPipeline();
+        CreateFramebuffers();
+        CreateCommandBuffers();
     }
 
     void VulkanWindow::CreateSwapChain() {
@@ -329,20 +350,35 @@ namespace voxelfield::window {
         VkPresentModeKHR presentationMode;
         bool foundImmediate = false;
         for (const auto& availablePresentationMode : m_PhysicalDevice.supportedPresentationModes) {
+            logging::Log(logging::LogType::INFORMATION_LOG,
+                         util::Format("Found available presentation mode: %d", MAX_MESSAGE_LENGTH, availablePresentationMode));
             if (availablePresentationMode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
                 presentationMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
                 foundImmediate = true;
+                break;
             }
         }
-        if (!foundImmediate) presentationMode = VK_PRESENT_MODE_FIFO_KHR;
-        uint32 imageCount = m_PhysicalDevice.surfaceCapabilities.minImageCount + 1;
-        if (m_PhysicalDevice.surfaceCapabilities.maxImageCount > 0 && imageCount > m_PhysicalDevice.surfaceCapabilities.maxImageCount)
-            imageCount = m_PhysicalDevice.surfaceCapabilities.maxImageCount;
+        if (!foundImmediate) presentationMode = VK_PRESENT_MODE_MAILBOX_KHR;
+        VkSurfaceCapabilitiesKHR surfaceCapabilities;
+        if (const VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_PhysicalDevice.handle, m_SurfaceHandle, &surfaceCapabilities);
+                result != VK_SUCCESS) {
+            throw std::runtime_error(util::Format("Error code %i, could not retrieve device surface capabilities", MAX_MESSAGE_LENGTH, result));
+        }
+        uint32 imageCount = surfaceCapabilities.minImageCount + 1;
+        if (surfaceCapabilities.maxImageCount > 0 && imageCount > surfaceCapabilities.maxImageCount)
+            imageCount = surfaceCapabilities.maxImageCount;
         const bool sameQueueFamilyIndices = m_QueueFamilyIndices.graphicsFamilyIndex == m_QueueFamilyIndices.presentationFamilyIndex;
         const VkSharingMode sharingMode = sameQueueFamilyIndices
                                           ? VK_SHARING_MODE_EXCLUSIVE
                                           : VK_SHARING_MODE_CONCURRENT;
-        const VkExtent2D extent = m_PhysicalDevice.surfaceCapabilities.currentExtent;
+        Rectangle area;
+        GetClientRect(m_Handle, &area);
+        const VkExtent2D& minExtent = surfaceCapabilities.minImageExtent, maxExtent = surfaceCapabilities.maxImageExtent;
+        VkExtent2D extent = {
+                std::clamp(static_cast<uint32>(area.right), minExtent.width, maxExtent.width),
+                std::clamp(static_cast<uint32>(area.bottom), minExtent.height, maxExtent.height),
+        };
+//        logging::Log(logging::LogType::INFORMATION_LOG, util::Format("%d, %d", MAX_MESSAGE_LENGTH, extent.width, extent.height));
         VkSwapchainCreateInfoKHR swapchainCreationInformation{
                 VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
                 nullptr,
@@ -355,7 +391,7 @@ namespace voxelfield::window {
                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                 sharingMode,
                 0, nullptr,
-                m_PhysicalDevice.surfaceCapabilities.currentTransform,
+                surfaceCapabilities.currentTransform,
                 VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
                 presentationMode,
                 VK_TRUE,
@@ -367,8 +403,8 @@ namespace voxelfield::window {
                                                                                  m_QueueFamilyIndices.presentationFamilyIndex};
             swapchainCreationInformation.pQueueFamilyIndices = queueFamilyIndices.data();
         }
-        if (const VkResult result = vkCreateSwapchainKHR(m_LogicalDeviceHandle, &swapchainCreationInformation, nullptr, &m_SwapchainHandle); result !=
-                                                                                                                                             VK_SUCCESS) {
+        if (const VkResult result = vkCreateSwapchainKHR(m_LogicalDeviceHandle, &swapchainCreationInformation, nullptr, &m_SwapchainHandle);
+                result != VK_SUCCESS) {
             throw std::runtime_error(util::Format("Error code %i, could not create Vulkan swapchain", MAX_MESSAGE_LENGTH, result));
         }
         logging::Log(logging::LogType::INFORMATION_LOG, "Successfully created Vulkan swapchain");
@@ -381,7 +417,7 @@ namespace voxelfield::window {
 
     void VulkanWindow::CreateImageViews() {
         m_SwapchainImageViewHandles.resize(m_SwapchainImageHandles.size());
-        for (int imageIndex = 0; imageIndex < m_SwapchainImageHandles.size(); imageIndex++) {
+        for (size_t imageIndex = 0; imageIndex < m_SwapchainImageHandles.size(); imageIndex++) {
             VkImageViewCreateInfo imageViewCreateInformation{
                     VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
                     nullptr,
@@ -449,10 +485,8 @@ namespace voxelfield::window {
                 VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
                 nullptr,
                 0,
-                1,
-                &viewport,
-                1,
-                &scissor
+                1, &viewport,
+                1, &scissor
         };
         VkPipelineRasterizationStateCreateInfo rasterizationStateCreationInformation{
                 VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
@@ -484,7 +518,7 @@ namespace voxelfield::window {
                 VK_BLEND_OP_ADD,
                 VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO,
                 VK_BLEND_OP_ADD,
-                0
+                VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
         };
         VkPipelineColorBlendStateCreateInfo colorBlendStateCreationInformation{
                 VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
@@ -583,17 +617,14 @@ namespace voxelfield::window {
 
     void VulkanWindow::CreateFramebuffers() {
         m_SwapChainFramebufferHandles.resize(m_SwapchainImageViewHandles.size());
-        for (size_t i = 0; i < m_SwapchainImageViewHandles.size(); i++) {
-            VkImageView attachment[]{
-                    m_SwapchainImageViewHandles[i]
-            };
+        for (int i = 0; i < m_SwapchainImageViewHandles.size(); i++) {
+            std::array<VkImageView, 1> attachment{m_SwapchainImageViewHandles[i]};
             VkFramebufferCreateInfo framebufferCreationInformation{
                     VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
                     nullptr,
                     0,
                     m_RenderPassHandle,
-                    1,
-                    attachment,
+                    static_cast<uint32>(attachment.size()), attachment.data(),
                     m_SwapchainExtent.width,
                     m_SwapchainExtent.height,
                     1
@@ -616,6 +647,50 @@ namespace voxelfield::window {
                 result != VK_SUCCESS) {
             throw std::runtime_error(util::Format("Error code %i, could not create Vulkan command pool", MAX_MESSAGE_LENGTH, result));
         }
+    }
+
+    void VulkanWindow::CreateVertexBuffer() {
+        std::vector<vertex> vertices{
+                {0.0,  -0.5, 0.0},
+                {0.5,  0.5,  0.0},
+                {-0.5, 0.5,  0.0}
+        };
+        VkBufferCreateInfo bufferCreationInformation{
+                VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                nullptr,
+                0,
+                sizeof(vertex) * vertices.size(),
+                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                VK_SHARING_MODE_EXCLUSIVE,
+                0,
+                nullptr
+        };
+        if (const VkResult result = vkCreateBuffer(m_LogicalDeviceHandle, &bufferCreationInformation, nullptr, &m_VertexBufferHandle);
+                result != VK_SUCCESS) {
+            throw std::runtime_error(util::Format("Error code %i, could not create Vulkan vertex buffer", MAX_MESSAGE_LENGTH, result));
+        }
+        VkMemoryRequirements memoryRequirements;
+        vkGetBufferMemoryRequirements(m_LogicalDeviceHandle, m_VertexBufferHandle, &memoryRequirements);
+        VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties;
+        vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice.handle, &physicalDeviceMemoryProperties);
+        std::optional<uint32> memoryTypeIndex;
+        VkMemoryPropertyFlags memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        for (int i = 0; i < physicalDeviceMemoryProperties.memoryTypeCount; i++) {
+            if ((memoryRequirements.memoryTypeBits * (1 << i)) &&
+                (physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & memoryProperties) != 0) {
+                memoryTypeIndex = i;
+                break;
+            }
+        }
+        if (!memoryTypeIndex.has_value())
+            throw std::runtime_error("Failed to find suitable memory type");
+        VkMemoryAllocateInfo memoryAllocationInformation{
+                VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                nullptr,
+                memoryRequirements.size,
+                memoryTypeIndex.value()
+        };
+        if (const VkResult result = vkAllocateMemory(m_LogicalDeviceHandle, &memoryAllocationInformation, nullptr, &m_VertexBufferMemoryHandle))
     }
 
     void VulkanWindow::CreateCommandBuffers() {
@@ -665,7 +740,7 @@ namespace voxelfield::window {
     void VulkanWindow::CreateSynchronizationObjects() {
         m_ImageAvailableSemaphoreHandles.resize(MAX_FRAMES_IN_FLIGHT);
         m_RenderFinishedSemaphoreHandles.resize(MAX_FRAMES_IN_FLIGHT);
-        m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+        m_InFlightFenceHandles.resize(MAX_FRAMES_IN_FLIGHT);
         VkSemaphoreCreateInfo semaphoreCreationInformation{
                 VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
                 nullptr,
@@ -681,7 +756,7 @@ namespace voxelfield::window {
                 != VK_SUCCESS ||
                 vkCreateSemaphore(m_LogicalDeviceHandle, &semaphoreCreationInformation, nullptr, &m_RenderFinishedSemaphoreHandles[i])
                 != VK_SUCCESS ||
-                vkCreateFence(m_LogicalDeviceHandle, &fenceCreationInformation, nullptr, &m_InFlightFences[i])
+                vkCreateFence(m_LogicalDeviceHandle, &fenceCreationInformation, nullptr, &m_InFlightFenceHandles[i])
                 != VK_SUCCESS) {
                 throw std::runtime_error("Failed to create some semaphores idk");
             }
@@ -704,44 +779,52 @@ namespace voxelfield::window {
         return shaderModule;
     }
 
-#undef max
-
     void VulkanWindow::DrawFrame() {
-        vkWaitForFences(m_LogicalDeviceHandle, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, std::numeric_limits<uint64>::max());
-        vkResetFences(m_LogicalDeviceHandle, 1, &m_InFlightFences[m_CurrentFrame]);
+        vkWaitForFences(m_LogicalDeviceHandle, 1, &m_InFlightFenceHandles[m_CurrentFrame], VK_TRUE, ULONG_MAX);
+        vkResetFences(m_LogicalDeviceHandle, 1, &m_InFlightFenceHandles[m_CurrentFrame]);
         uint32 imageIndex;
-        vkAcquireNextImageKHR(m_LogicalDeviceHandle, m_SwapchainHandle, std::numeric_limits<uint64>::max(),
-                              m_ImageAvailableSemaphoreHandles[m_CurrentFrame], VK_NULL_HANDLE,
-                              &imageIndex);
-        VkSubmitInfo submitInfo{};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        VkSemaphore waitSemaphores[]{m_ImageAvailableSemaphoreHandles[m_CurrentFrame]};
-        VkPipelineStageFlags waitStages[]{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        submitInfo.waitSemaphoreCount = 1;
-        submitInfo.pWaitSemaphores = waitSemaphores;
-        submitInfo.pWaitDstStageMask = waitStages;
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &m_CommandBufferHandles[imageIndex];
-        VkSemaphore signalSemaphores[]{m_RenderFinishedSemaphoreHandles[m_CurrentFrame]};
-        submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores = signalSemaphores;
-        if (const VkResult result = vkQueueSubmit(m_GraphicsQueueHandle, 1, &submitInfo, m_InFlightFences[m_CurrentFrame]); result != VK_SUCCESS) {
+        if (const VkResult result = vkAcquireNextImageKHR(m_LogicalDeviceHandle, m_SwapchainHandle, ULONG_MAX,
+                                                          m_ImageAvailableSemaphoreHandles[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+                result != VK_SUCCESS) {
+            throw std::runtime_error(util::Format("Error code %i, could not acquire next Vulkan image", MAX_MESSAGE_LENGTH, result));
+        }
+        std::array<VkSemaphore, 1> waitSemaphores{m_ImageAvailableSemaphoreHandles[m_CurrentFrame]};
+        std::array<VkSemaphore, 1> signalSemaphores{m_RenderFinishedSemaphoreHandles[m_CurrentFrame]};
+        VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        VkSubmitInfo submitInfo{
+                VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                nullptr,
+                static_cast<uint32>(waitSemaphores.size()), waitSemaphores.data(),
+                &waitStage,
+                1, &m_CommandBufferHandles[imageIndex],
+                static_cast<uint32>(signalSemaphores.size()), signalSemaphores.data()
+        };
+        if (const VkResult result = vkQueueSubmit(m_GraphicsQueueHandle, 1, &submitInfo, m_InFlightFenceHandles[m_CurrentFrame]); result !=
+                                                                                                                                  VK_SUCCESS) {
             throw std::runtime_error(util::Format("Error code %i, could not submit Vulkan graphics queue", MAX_MESSAGE_LENGTH, result));
         }
-        VkPresentInfoKHR presentInfo{};
-        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores = signalSemaphores;
-        VkSwapchainKHR swapChains[]{m_SwapchainHandle};
-        presentInfo.swapchainCount = 1;
-        presentInfo.pSwapchains = swapChains;
-        presentInfo.pImageIndices = &imageIndex;
-        vkQueuePresentKHR(m_PresentationQueueHandle, &presentInfo);
+        std::array<VkSwapchainKHR, 1> swapChains{m_SwapchainHandle};
+        VkPresentInfoKHR presentInfo{
+                VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+                nullptr,
+                static_cast<uint32>(signalSemaphores.size()), signalSemaphores.data(),
+                static_cast<uint32>(swapChains.size()), swapChains.data(),
+                &imageIndex,
+                nullptr
+        };
+        {
+            const VkResult result = vkQueuePresentKHR(m_PresentationQueueHandle, &presentInfo);
+            if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+                RecreateSwapChain();
+                return;
+            } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+                throw std::runtime_error(util::Format("Error code %i, could not present Vulkan queue", MAX_MESSAGE_LENGTH, result));
+            }
+        }
         m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
     void VulkanWindow::Draw() {
         DrawFrame();
-        vkDeviceWaitIdle(m_LogicalDeviceHandle);
     }
 }
